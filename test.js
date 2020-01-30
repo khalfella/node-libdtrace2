@@ -12,6 +12,10 @@ try {
 
 	dtc.go();
 
+	dtc.consume(function(probe, rec) {
+		console.log(rec);
+	});
+
 } catch (e) {
 	console.log('Exception has been thrown', e.toString());
 }
