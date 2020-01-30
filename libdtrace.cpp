@@ -32,6 +32,7 @@ private:
   static int bufhandler_cb(const dtrace_bufdata_t *, void *);
 
   // utility functions
+  v8::Local<v8::Value> probedesc(const dtrace_probedesc_t *);
   v8::Local<v8::Value> record(const dtrace_recdesc_t *, caddr_t);
 
   static Nan::Persistent<v8::Function> constructor;
@@ -40,6 +41,20 @@ private:
 };
 
 Nan::Persistent<v8::Function> DTraceConsumer::constructor;
+
+v8::Local<v8::Value> DTraceConsumer::probedesc(const dtrace_probedesc_t *pd) {
+  Local<Object> probe = Nan::New<Object>();
+
+  probe->Set(Nan::New<String>("provider").ToLocalChecked(),
+             Nan::New<String>(pd->dtpd_provider).ToLocalChecked());
+  probe->Set(Nan::New<String>("module").ToLocalChecked(),
+             Nan::New<String>(pd->dtpd_mod).ToLocalChecked());
+  probe->Set(Nan::New<String>("function").ToLocalChecked(),
+             Nan::New<String>(pd->dtpd_func).ToLocalChecked());
+  probe->Set(Nan::New<String>("name").ToLocalChecked(),
+             Nan::New<String>(pd->dtpd_name).ToLocalChecked());
+  return (probe);
+}
 
 v8::Local<v8::Value> DTraceConsumer::record(const dtrace_recdesc_t *rec,
                                             caddr_t addr) {
@@ -104,11 +119,17 @@ v8::Local<v8::Value> DTraceConsumer::record(const dtrace_recdesc_t *rec,
     return (Nan::New<String>(buf).ToLocalChecked());
   }
 
-  return Nan::Null();
+  return Nan::New<Number>(-1);
 }
 
 int DTraceConsumer::consume_cb(const dtrace_probedata_t *data,
                                const dtrace_recdesc_t *rec, void *arg) {
+
+  /*
+          DTraceConsumer *dtc = (DTraceConsumer *)arg;
+          dtrace_probedesc_t *pd = data->dtpda_pdesc;
+  */
+
   return (0);
 }
 
