@@ -6,16 +6,6 @@
 #include <unistd.h>
 #include <vector>
 
-/*
- * Sadly, libelf refuses to compile if _FILE_OFFSET_BITS has been manually
- * jacked to 64 on a 32-bit compile.  In this case, we just manually set it
- * back to 32.
- */
-#if defined(_ILP32) && (_FILE_OFFSET_BITS != 32)
-#undef _FILE_OFFSET_BITS
-#define _FILE_OFFSET_BITS 32
-#endif
-
 #include <dtrace.h>
 
 using namespace Nan;
@@ -28,9 +18,10 @@ public:
 
 private:
   explicit DTraceConsumer();
-  ~DTraceConsumer() {}
+  ~DTraceConsumer();
 
   static NAN_METHOD(New);
+  static NAN_METHOD(StrCompile);
   static NAN_METHOD(GetValue);
 
   static int bufhandler(const dtrace_bufdata_t *, void *);
@@ -71,11 +62,15 @@ DTraceConsumer::DTraceConsumer() {
   this->value_ = 0;
 }
 
+DTraceConsumer::~DTraceConsumer() { dtrace_close(this->dtc_handle); }
+
 NAN_MODULE_INIT(DTraceConsumer::Init) {
   v8::Local<v8::FunctionTemplate> tpl = Nan::New<v8::FunctionTemplate>(New);
   tpl->InstanceTemplate()->SetInternalFieldCount(1);
 
   Nan::SetPrototypeMethod(tpl, "getValue", GetValue);
+  Nan::SetPrototypeMethod(tpl, "strcompile", DTraceConsumer::StrCompile);
+
   constructor.Reset(Nan::GetFunction(tpl).ToLocalChecked());
 }
 
@@ -86,6 +81,39 @@ NAN_METHOD(DTraceConsumer::NewInstance) {
   v8::Local<v8::Value> argv[1] = {Nan::New(value)};
   info.GetReturnValue().Set(
       Nan::NewInstance(cons, argc, argv).ToLocalChecked());
+}
+
+NAN_METHOD(DTraceConsumer::StrCompile) {
+  DTraceConsumer *dtc = ObjectWrap::Unwrap<DTraceConsumer>(info.Holder());
+
+  if (info.Length() < 1 || !info[0]->IsString()) {
+    Nan::ThrowTypeError("expected string program argument");
+    return;
+  }
+
+  Nan::MaybeLocal<String> prog = Nan::To<String>(info[0]);
+  Nan::Utf8String uprog(prog.ToLocalChecked());
+
+  std::string program(*uprog);
+
+  dtrace_prog_t *dp;
+  if ((dp = dtrace_program_strcompile(dtc->dtc_handle, program.c_str(),
+                                      DTRACE_PROBESPEC_NAME, 0, 0, NULL)) ==
+      NULL) {
+    Nan::ThrowError(
+        dtrace_errmsg(dtc->dtc_handle, dtrace_errno(dtc->dtc_handle)));
+    return;
+  }
+
+  dtrace_proginfo_t prog_info;
+
+  if (dtrace_program_exec(dtc->dtc_handle, dp, &prog_info) == -1) {
+    Nan::ThrowError(
+        dtrace_errmsg(dtc->dtc_handle, dtrace_errno(dtc->dtc_handle)));
+    return;
+  }
+
+  info.GetReturnValue().Set(Nan::Undefined());
 }
 
 NAN_METHOD(DTraceConsumer::GetValue) {
