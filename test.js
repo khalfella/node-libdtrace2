@@ -6,7 +6,7 @@ try {
 
 
 	var dtc = new libdtrace.DTraceConsumer();
-	var prog = 'BEGIN { trace("hello world"); }';
+	var prog = 'BEGIN { trace("hello"); printf("world");}';
     
 	dtc.strcompile(prog);
 

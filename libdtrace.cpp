@@ -191,7 +191,24 @@ int DTraceConsumer::consume_cb(const dtrace_probedata_t *data,
 }
 
 int DTraceConsumer::bufhandler_cb(const dtrace_bufdata_t *bufdata, void *arg) {
-  return (0);
+
+  dtrace_probedata_t *data = bufdata->dtbda_probe;
+  const dtrace_recdesc_t *rec = bufdata->dtbda_recdesc;
+  DTraceConsumer *dtc = (DTraceConsumer *)arg;
+
+  if (rec == NULL || rec->dtrd_action != DTRACEACT_PRINTF)
+    return (DTRACE_HANDLE_OK);
+
+  v8::Local<v8::Value> probe = dtc->probedesc(data->dtpda_pdesc);
+  v8::Local<v8::Object> record = Nan::New<Object>();
+  record->Set(Nan::New<String>("data").ToLocalChecked(),
+              Nan::New<String>(bufdata->dtbda_buffered).ToLocalChecked());
+  Local<Value> argv[2] = {probe, record};
+
+  // XXX: Verify that dtc_callback and dtc_info are set correctly
+  dtc->dtc_callback.Call(dtc->dtc_info->This(), 2, argv);
+
+  return (DTRACE_HANDLE_OK);
 }
 
 DTraceConsumer::DTraceConsumer() {
