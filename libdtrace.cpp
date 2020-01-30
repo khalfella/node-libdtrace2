@@ -20,12 +20,19 @@ private:
   explicit DTraceConsumer();
   ~DTraceConsumer();
 
+  // Methods exported to nodejs
   static NAN_METHOD(New);
   static NAN_METHOD(StrCompile);
   static NAN_METHOD(Go);
   static NAN_METHOD(GetValue);
 
-  static int bufhandler(const dtrace_bufdata_t *, void *);
+  // Callback functions
+  static int consume_cb(const dtrace_probedata_t *, const dtrace_recdesc_t *,
+                        void *);
+  static int bufhandler_cb(const dtrace_bufdata_t *, void *);
+
+  // utility functions
+  v8::Local<v8::Value> record(const dtrace_recdesc_t *, caddr_t);
 
   static Nan::Persistent<v8::Function> constructor;
   double value_;
@@ -34,7 +41,78 @@ private:
 
 Nan::Persistent<v8::Function> DTraceConsumer::constructor;
 
-int DTraceConsumer::bufhandler(const dtrace_bufdata_t *bufdata, void *arg) {
+v8::Local<v8::Value> DTraceConsumer::record(const dtrace_recdesc_t *rec,
+                                            caddr_t addr) {
+
+  switch (rec->dtrd_action) {
+  case DTRACEACT_DIFEXPR:
+    switch (rec->dtrd_size) {
+    case sizeof(uint64_t):
+      return Nan::New<Number>(*((int64_t *)addr));
+    case sizeof(uint32_t):
+      return Nan::New<Number>(*((int32_t *)addr));
+    case sizeof(uint16_t):
+      return Nan::New<Number>(*((int16_t *)addr));
+    case sizeof(uint8_t):
+      return Nan::New<Number>(*((int8_t *)addr));
+    default:
+      return Nan::New<String>((const char *)addr).ToLocalChecked();
+    }
+
+  case DTRACEACT_SYM:
+  case DTRACEACT_MOD:
+  case DTRACEACT_USYM:
+  case DTRACEACT_UMOD:
+  case DTRACEACT_UADDR:
+
+    dtrace_hdl_t *dtp = this->dtc_handle;
+    char buf[2048], *tick, *plus;
+
+    buf[0] = '\0';
+
+    if (DTRACEACT_CLASS(rec->dtrd_action) == DTRACEACT_KERNEL) {
+      uint64_t pc = ((uint64_t *)addr)[0];
+      dtrace_addr2str(dtp, pc, buf, sizeof(buf) - 1);
+    } else {
+      uint64_t pid = ((uint64_t *)addr)[0];
+      uint64_t pc = ((uint64_t *)addr)[1];
+      dtrace_uaddr2str(dtp, pid, pc, buf, sizeof(buf) - 1);
+    }
+
+    if (rec->dtrd_action == DTRACEACT_MOD ||
+        rec->dtrd_action == DTRACEACT_UMOD) {
+      /*
+       * If we're looking for the module name, we'll
+       * return everything to the left of the left-most
+       * tick -- or "<undefined>" if there is none.
+       */
+      if ((tick = strchr(buf, '`')) == NULL)
+        return (Nan::New<String>("<unknown>").ToLocalChecked());
+
+      *tick = '\0';
+    } else if (rec->dtrd_action == DTRACEACT_SYM ||
+               rec->dtrd_action == DTRACEACT_USYM) {
+      /*
+       * If we're looking for the symbol name, we'll
+       * return everything to the left of the right-most
+       * plus sign (if there is one).
+       */
+      if ((plus = strrchr(buf, '+')) != NULL)
+        *plus = '\0';
+    }
+
+    return (Nan::New<String>(buf).ToLocalChecked());
+  }
+
+  return Nan::Null();
+}
+
+int DTraceConsumer::consume_cb(const dtrace_probedata_t *data,
+                               const dtrace_recdesc_t *rec, void *arg) {
+  return (0);
+}
+
+int DTraceConsumer::bufhandler_cb(const dtrace_bufdata_t *bufdata, void *arg) {
   return (0);
 }
 
@@ -54,7 +132,7 @@ DTraceConsumer::DTraceConsumer() {
   (void)dtrace_setopt(this->dtc_handle, "bufsize", "4m");
   (void)dtrace_setopt(this->dtc_handle, "aggsize", "4m");
 
-  if (dtrace_handle_buffered(this->dtc_handle, DTraceConsumer::bufhandler,
+  if (dtrace_handle_buffered(this->dtc_handle, DTraceConsumer::bufhandler_cb,
                              this) == -1) {
     Nan::ThrowError(dtrace_errmsg(this->dtc_handle, err));
     return;
