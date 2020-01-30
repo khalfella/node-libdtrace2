@@ -44,3 +44,11 @@ $ node test.js
 undefined
 $
 ```
+
+### Tested on the below versions of node:
+- v0.10.48
+- v4.9.1
+- v8.17.0
+- v10.14.2
+- v10.18.1
+- v12.14.1

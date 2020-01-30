@@ -343,4 +343,4 @@ NAN_MODULE_INIT(Init) {
                .ToLocalChecked());
 }
 
-NODE_MODULE(libdtrace, Init)
+NODE_MODULE(dtrace, Init)
