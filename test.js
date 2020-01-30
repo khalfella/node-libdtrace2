@@ -10,6 +10,8 @@ try {
     
 	dtc.strcompile(prog);
 
+	dtc.go();
+
 } catch (e) {
 	console.log('Exception has been thrown', e.toString());
 }

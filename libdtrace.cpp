@@ -22,6 +22,7 @@ private:
 
   static NAN_METHOD(New);
   static NAN_METHOD(StrCompile);
+  static NAN_METHOD(Go);
   static NAN_METHOD(GetValue);
 
   static int bufhandler(const dtrace_bufdata_t *, void *);
@@ -70,6 +71,7 @@ NAN_MODULE_INIT(DTraceConsumer::Init) {
 
   Nan::SetPrototypeMethod(tpl, "getValue", GetValue);
   Nan::SetPrototypeMethod(tpl, "strcompile", DTraceConsumer::StrCompile);
+  Nan::SetPrototypeMethod(tpl, "go", DTraceConsumer::Go);
 
   constructor.Reset(Nan::GetFunction(tpl).ToLocalChecked());
 }
@@ -113,6 +115,17 @@ NAN_METHOD(DTraceConsumer::StrCompile) {
     return;
   }
 
+  info.GetReturnValue().Set(Nan::Undefined());
+}
+
+NAN_METHOD(DTraceConsumer::Go) {
+  DTraceConsumer *dtc = ObjectWrap::Unwrap<DTraceConsumer>(info.Holder());
+
+  if (dtrace_go(dtc->dtc_handle) == -1) {
+    Nan::ThrowError(
+        dtrace_errmsg(dtc->dtc_handle, dtrace_errno(dtc->dtc_handle)));
+    return;
+  }
   info.GetReturnValue().Set(Nan::Undefined());
 }
 
